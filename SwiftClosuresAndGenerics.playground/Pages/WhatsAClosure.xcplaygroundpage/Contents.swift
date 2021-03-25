@@ -69,17 +69,30 @@ typealias TypeC = Bool
 var closure: (_ inputA: TypeA, _ inputB: TypeB) -> TypeC
 
 extension TypeA {
-    
+
     func getC(from inputB: TypeB) -> TypeC {
         self.isMultiple(of: inputB)
     }
-    
+
 }
 
-// Explicit Closure Implementations
+closure = { (inputA: TypeA, inputB: TypeB) -> TypeC in return inputA.getC(from: inputB) }
 
+PGAssertTrue(closure(30, 15))
 
+func number(_ inputA: TypeA, isGreaterThan inputB: TypeB) -> TypeC {
+    inputA > inputB
+}
 
+PGAssertTrue(number(14, isGreaterThan: 3))
+
+PGAssertEqualTypes(closure, number(_:isGreaterThan:))
+
+PGAssertFalse(closure(14, 3))
+
+closure = number(_:isGreaterThan:)
+
+PGAssertTrue(closure(3, 2))
 
 /*: ___
  
@@ -120,7 +133,17 @@ extension TypeA {
 
 // Implicit Closure Implementations
 
+closure = { inputA, inputB in return inputA.getC(from: inputB) }
 
+PGAssertTrue(closure(12, 2))
+
+closure = { $0.getC(from: $1) }
+
+PGAssertTrue(closure(12, 2))
+
+closure = { _, _ in return false }
+
+PGAssertFalse(closure(2, 12))
 
 /*: ___
  
@@ -139,7 +162,28 @@ extension TypeA {
 
 // Capture List Implementations
 
+class SomeClass { }
 
+let stronglyHeld = SomeClass()
+
+var weaklyHeld = SomeClass()
+
+var notHeldAtAll: SomeClass? = SomeClass()
+
+closure = { [s = stronglyHeld, weak w = weaklyHeld, unowned u = notHeldAtAll] _, _ in
+    describe(s).printed()
+    describe(w).printed()
+    describe(u).printed()
+    return true
+}
+
+//notHeldAtAll = nil
+//PGAssertNil(notHeldAtAll)
+
+//weaklyHeld = nil
+//PGAssertNil(weaklyHeld)
+
+closure(1, 1)
 
 
 /*: ___
@@ -158,8 +202,40 @@ extension TypeA {
 
 // Class Method Implementations
 
+class Example {
+    
+    var count: Int = 0
+    
+    //self Strongly
+    func increment() -> Int {
+        count += 1
+        return count
+    }
+    
+    var weakIncrement: () -> Int {
+        return { [weak self] in
+            guard let self = self else { return 0 }
+            self.count += 1
+            return self.count
+        }
+    }
+    
+}
+
+var exmplIncr: () -> Int
+
+var example: Example? = Example()
 
 
+exmplIncr = example?.weakIncrement ?? { 0xDEADBEEF }
+
+exmplIncr()
+
+example = nil
+
+exmplIncr()
+
+PGAssertNil(example)
 
 /*: ___
  
@@ -178,8 +254,18 @@ extension TypeA {
  */
 
 // @autoclosure Implementations
+func autoFunction<T>(_ evaluate: @autoclosure () -> T ) {
+    "Start".printed()
+    describe(evaluate()).printed()
+    "Finish".printed()
+}
 
+func getNumber() -> Int {
+    "Executed".printed()
+    return 12
+}
 
+autoFunction(getNumber())
 
 
 /*: ___
@@ -195,8 +281,27 @@ extension TypeA {
 
 // @escaping and withoutActuallyEscaping implementations
 
+func closureAssigner(_ value: @escaping (TypeA, TypeB) -> TypeC) {
+    closure = value
+}
 
 
+closureAssigner { $0.getC(from: $1) }
+
+PGAssertTrue(closure(4, 2))
+
+func evaluateWithSixAndTwo(_ value: ((TypeA, TypeB) -> TypeC)? = nil) -> TypeC {
+    guard let value = value else { return false }
+    return value(6, 2)
+}
+
+func nonEscaping(_ evaluate: (TypeA, TypeB) -> TypeC) -> TypeC {
+    return  withoutActuallyEscaping(evaluate) { evaluateWithSixAndTwo($0) }
+}
+
+PGAssertTrue(nonEscaping { $0.getC(from: $1) })
+
+describe(closureAssigner).printed()
 
 /*: ___
  
@@ -214,8 +319,63 @@ extension TypeA {
 
 typealias TypeD = Int
 
+//var 🧐: (TypeA, TypeB, @escaping (TypeA, TypeB) -> TypeC) -> (TypeA, TypeB, TypeD) -> TypeA
 
+var 🧐: (
+    TypeA, //Input 1
+    TypeB, //Input 2
+    @escaping ( //Input 3
+        TypeA, //Input3.1
+        TypeB // Input3.2
+    ) -> TypeC // 3.O1
 
+// This is output
+) -> (
+    TypeA,
+    TypeB,
+    TypeD
+) -> TypeA
+
+🧐 = { valueA, valueB, evaluator in
+    return { anotherA, anotherB, anotherD in
+        if evaluator(valueA, valueB) {
+            return anotherA + anotherB + anotherD
+        } else {
+            return anotherA - anotherB - anotherD
+        }
+    }
+}
+
+func functionVersion(
+    valueA: TypeA,
+    valueB: TypeB ,
+    evaluator: @escaping (TypeA, TypeB) -> TypeC
+) -> (TypeA, TypeB, TypeD) -> TypeA {
+    return { anotherA, anotherB, anotherD in
+        if evaluator(valueA, valueB) {
+            return anotherA + anotherB + anotherD
+        } else {
+            return anotherA - anotherB - anotherD
+        }
+    }
+}
+
+PGAssertEqual(🧐(6, 2, { $0.getC(from: $1) })(1,2,3), 6)
+PGAssertEqual(🧐(6, 5, { $0.getC(from: $1) })(1,2,3), -4)
+
+struct Person {
+    let name: String
+    let age: Int
+    let hobby: String
+}
+
+let constructor: (@escaping (String, Int, String) -> Person) -> (String) -> (Int) -> (String) -> Person
+
+constructor = { initializer in { name in { age in { hobby in initializer(name, age, hobby) } } } }
+
+let personConstruct = constructor(Person.init)
+
+describe(personConstruct("Stephen")(21)("Teaching Swift")).printed()
 
 
 //: [Next](@next)

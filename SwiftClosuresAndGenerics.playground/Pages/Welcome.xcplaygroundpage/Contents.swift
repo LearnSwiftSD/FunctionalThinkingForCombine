@@ -34,4 +34,6 @@
  1 - [Introduction](Introduction)
  
  2 - [What's A Closure?](WhatsAClosure)
+ 
+ 3 - [What's A Generic?](WhatsAGeneric)
  */

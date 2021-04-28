@@ -4,5 +4,6 @@
         <page name='Welcome'/>
         <page name='Introduction'/>
         <page name='WhatsAClosure'/>
+        <page name='WhatsAGeneric'/>
     </pages>
 </playground>

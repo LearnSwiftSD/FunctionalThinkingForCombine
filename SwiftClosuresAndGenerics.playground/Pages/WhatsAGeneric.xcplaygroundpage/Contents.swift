@@ -46,6 +46,23 @@
 
 // Generic Function Implementations
 
+func describe<Thing>(_ input: Thing) -> String {
+    "\(type(of: input)): \(String(describing: input))"
+}
+
+describe(12.0)
+
+func PGAssertEqualType<A, B>(_ a: A, _ b: B, line: UInt = #line) {
+    switch type(of: a) == type(of: b) {
+    case true:
+        print("✅", "\(line):", #function, "passed")
+    case false:
+        print("❌", "\(line):", #function, "Type \(describe(a)) is not \(describe(b))")
+    }
+}
+
+PGAssertEqualType(12, "18")
+
 /*:
  ___
  
@@ -58,6 +75,18 @@
  */
 
 // Constrained Generic Implementations
+
+func PGAssertEqual<T: Equatable>(_ a: T , _ b: T, line: UInt = #line) {
+    switch a == b {
+        case true:
+            print("✅", "\(line):", #function, "passed")
+        case false:
+            print("❌", "\(line):", #function, "\(describe(a)) is not equal to \(describe(b))")
+    }
+}
+
+PGAssertEqual(16, 16)
+
 
 /*:
  ___
@@ -76,6 +105,41 @@
 
 // Generic Type Implementations
 
+enum Either<Left, Right> {
+    
+    case left(Left)
+    case right(Right)
+    
+}
+
+var eitherExamp: Either<Int, Double>
+
+eitherExamp = .right(12.0)
+eitherExamp = .left(12)
+
+enum LetterGrade: String {
+    case a = "A"
+    case b = "B"
+    case c = "C"
+    case d = "D"
+    case f = "F"
+}
+
+struct Percentage: ExpressibleByFloatLiteral {
+
+    let rawValue: Double
+    
+    init(floatLiteral value: Double) {
+        self.rawValue = value
+    }
+
+}
+
+var studentGrade: Either<LetterGrade, Percentage> = .right(90.0)
+
+studentGrade = .left(.a)
+
+
 /*:
  ___
  
@@ -92,6 +156,35 @@
 
 // Generic Extension Implementations
 
+extension Either: CustomStringConvertible where
+    Left: CustomStringConvertible,
+    Right: CustomStringConvertible {
+    
+    var description: String {
+        switch self {
+        case let .left(subject):
+            return subject.description
+        case let .right(subject):
+            return subject.description
+        }
+    }
+    
+}
+
+extension LetterGrade: CustomStringConvertible {
+    public var description: String {
+        "Grade \(rawValue)"
+    }
+}
+
+extension Percentage: CustomStringConvertible {
+    public var description: String {
+        "\(rawValue) %"
+    }
+}
+
+studentGrade.description
+
 /*:
  ___
  
@@ -104,6 +197,29 @@
  */
 
 // Generic Type Alias Implementations
+
+// Either<Int, Int>
+
+typealias EitherSame<T> = Either<T, T>
+
+let example: EitherSame = .left("")
+
+typealias EitherStringConvertable = EitherSame<CustomStringConvertible>
+
+extension EitherStringConvertable {
+    func print() {
+        switch self {
+        case let .left(subject):
+            Swift.print(subject.description)
+        case let .right(subject):
+            Swift.print(subject.description)
+        }
+    }
+}
+
+var anotherStudentGrade: EitherStringConvertable = .right(Percentage(floatLiteral: 63.9))
+
+anotherStudentGrade.print()
 
 /*:
  ___
@@ -119,6 +235,113 @@
 
 // Generic Protocol (PATs) Implementations
 
+protocol Translatable {
+    
+    associatedtype TranslatedType
+    
+    var translated: TranslatedType { get }
+    
+}
+
+extension Either where
+    Left: Translatable,
+    Left.TranslatedType == Right {
+    
+    var value: Right {
+        switch self {
+        case let .left(subject):
+            return subject.translated
+        case let .right(subject):
+            return subject
+        }
+    }
+
+}
+
+extension Either where
+    Right: Translatable,
+    Right.TranslatedType == Left {
+    
+    var value: Left {
+        switch self {
+        case let .left(subject):
+            return subject
+        case let .right(subject):
+            return subject.translated
+        }
+    }
+    
+}
+
+protocol Commutable: Translatable where
+    TranslatedType: Translatable,
+    TranslatedType.TranslatedType == Self {
+}
+
+extension Either where
+    Left: Commutable,
+    Left.TranslatedType == Right {
+    
+    var valueLeft: Left {
+        switch self {
+        case let .left(subject):
+            return subject
+        case let .right(subject):
+            return subject.translated
+        }
+    }
+    
+    var valueRight: Right {
+        switch self {
+        case let .left(subject):
+            return subject.translated
+        case let .right(subject):
+            return subject
+        }
+    }
+    
+}
+
+extension LetterGrade: Commutable {
+    
+    var translated: Percentage {
+        switch self {
+        case .a:
+            return 100.00
+        case .b:
+            return 90.00
+        case .c:
+            return 80.00
+        case .d:
+            return 70.00
+        case .f:
+            return 60.00
+        }
+    }
+    
+}
+
+extension Percentage: Commutable {
+    
+    var translated: LetterGrade {
+        switch self.rawValue {
+        case let x where x >= 100 :
+            return .a
+        case 90..<100:
+            return .b
+        case 80..<90:
+            return .c
+        case 70..<80:
+            return .d
+        default:
+            return .f
+        }
+    }
+    
+}
+
+studentGrade.valueRight
+
 /*:
  ___
  
@@ -133,6 +356,32 @@
 
 // Contextual `where` clause implementation
 
+extension Either where
+    Left: Commutable,
+    Left.TranslatedType == Right {
+    
+    func percentage() -> Percentage where Left == Percentage {
+        valueLeft
+    }
+    
+    func percentage() -> Percentage where Right == Percentage {
+        valueRight
+    }
+    
+    func letterGrade() -> LetterGrade where Left == LetterGrade {
+        valueLeft
+    }
+    
+    func letterGrade() -> LetterGrade where Right == LetterGrade {
+        valueRight
+    }
+    
+}
+
+studentGrade.percentage()
+
+studentGrade.letterGrade()
+
 /*:
  ___
  
@@ -144,6 +393,55 @@
  */
 
 // Integrated Implementations
+
+typealias SideEffect<Input> = (Input) -> Void
+
+typealias Transform<Input, Output> = (Input) -> Output
+
+typealias EitherSideEffect<T> = EitherSame<SideEffect<T>>
+
+typealias EitherTransform<Input, Output> = EitherSame<Transform<Input, Output>>
+
+extension Either where Left == Right {
+    
+    var value: Left {
+        switch self {
+        case let .left(val):
+            return val
+        case let .right(val):
+            return val
+        }
+    }
+    
+    func sideEffect<T>(_ input: T) where Left == SideEffect<T> {
+        value(input)
+    }
+    
+    func transform<Input, Output>(
+        _ input: Input
+    ) -> Output where
+        Left == Transform<Input, Output>  {
+        
+        value(input)
+    }
+    
+}
+
+let eitherSideEffect: EitherSideEffect<String> = .left { print($0) }
+
+eitherSideEffect.sideEffect("Im putting in my own inputs :)")
+
+let addition: Transform<(Int, Int), Int> = { $0.0 + $0.1 }
+
+let subtraction: Transform<(Int, Int), Int> = { $0.0 - $0.1 }
+
+var addOrSubtract: EitherTransform<(Int, Int), Int> = .right(subtraction)
+
+addOrSubtract.transform((4, 3))
+
+addOrSubtract = .left(addition)
+
+addOrSubtract.transform((3, 6))
 
 /*:
 
